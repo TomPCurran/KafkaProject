@@ -75,5 +75,49 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./db:/var/lib/postgresql/data
+      - ./starting_scripts:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
+
+  minio:
+    image: minio/minio
+    env_file:
+      - .env
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - ./minio_data:/minio_data
+
+    command: ["server", "--console-address", ":9001", "/data"]
+  
+  jupyter-mlflow:
+    build: .
+    env_file:
+      - .env
+    container_name: jupyter-mlflow
+    ports:
+      - "8888:8888"  # Port for Jupyter Lab
+      - "5001:5001"  # Port for MLflow UI
+    environment:
+      - MLFLOW_TRACKING_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${PG_HOST_PORT}/${MLFLOW_DB}
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow-artifacts
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000  # If using Minio for artifact storage
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER}  # Replace with your access key if using Minio or S3
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}  # Replace with your secret key    
+    volumes:
+      - .:/usr/src/app
+      - ./mlflow:/mlflow-artifacts
+      - ./notebooks:/notebooks
+    depends_on:
+      - postgres
+      - minio
+
+volumes:
+  zookeeper-data: {}
+  kafka-data: {}
+  db: {}
+  minio_data: {}
